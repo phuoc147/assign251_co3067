@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
 
     int* matrix_A = nullptr;
     int* matrix_B = nullptr;
-    int* matrix_B_T = nullptr; 
+    int* matrix_B_T = nullptr;
     int* matrix_C = nullptr;
     
     // -- 2. initialize data for 2 matrix

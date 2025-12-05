@@ -83,24 +83,23 @@ int* transposeMatrix(int* matrix, int size) {
 
 int* multiplication(int* matrix_A, int* matrix_B_T, int rows, int cols) {
     int* matrix_C_part = new int[rows * cols];
-    #pragma omp parallel
-    {
-        #pragma omp master 
-            {
-                int rank;
-                MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-                std::cout << "MPI Rank " << rank << " is using " 
-                          << omp_get_num_threads() << " OpenMP thread(s)." << std::endl;
+    
+    // 1. Create the parallel team AND distribute the work (i-loop)
+    #pragma omp parallel for
+    for (int i = 0; i < rows; i++) {
+        if (i == 0) {
+            int rank;
+            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+            std::cout << "MPI Rank " << rank << " is using " 
+                      << omp_get_num_threads() << " OpenMP thread(s)." << std::endl;
+        }
+        
+        for (int j = 0; j < cols; j++) {
+            int sum = 0;
+            for (int k = 0; k < cols; k++) {
+                sum += matrix_A[IDX(i, k, cols)] * matrix_B_T[IDX(j, k, cols)];
             }
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j++) {
-                
-                int sum = 0;
-                for (int k = 0; k < cols; k++) {
-                    sum += matrix_A[IDX(i, k, cols)] * matrix_B_T[IDX(j, k, cols)];
-                }
-                matrix_C_part[IDX(i, j, cols)] = sum;
-            }
+            matrix_C_part[IDX(i, j, cols)] = sum;
         }
     }
     return matrix_C_part;
