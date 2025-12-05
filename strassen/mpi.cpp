@@ -98,48 +98,37 @@ void strassen_recursive(int* A, int* B, int* C, int n) {
         }
     }
     
-    #pragma omp task shared(a11, a22, b11, b22, p1)
-    {
-        int *tA = allocate_matrix(k), *tB = allocate_matrix(k);
-        add(a11, a22, tA, k); add(b11, b22, tB, k);
-        strassen_recursive(tA, tB, p1, k);
-        free_matrix(tA); free_matrix(tB);
-    }
-    #pragma omp task shared(a21, a22, b11, p2)
-    {
-        int *tA = allocate_matrix(k);
-        add(a21, a22, tA, k); strassen_recursive(tA, b11, p2, k); free_matrix(tA);
-    }
-    #pragma omp task shared(a11, b12, b22, p3)
-    {
-        int *tB = allocate_matrix(k);
-        sub(b12, b22, tB, k); strassen_recursive(a11, tB, p3, k); free_matrix(tB);
-    }
-    #pragma omp task shared(a22, b21, b11, p4)
-    {
-        int *tB = allocate_matrix(k);
-        sub(b21, b11, tB, k); strassen_recursive(a22, tB, p4, k); free_matrix(tB);
-    }
-    #pragma omp task shared(a11, a12, b22, p5)
-    {
-        int *tA = allocate_matrix(k);
-        add(a11, a12, tA, k); strassen_recursive(tA, b22, p5, k); free_matrix(tA);
-    }
-    #pragma omp task shared(a21, a11, b11, b12, p6)
-    {
-        int *tA = allocate_matrix(k), *tB = allocate_matrix(k);
-        sub(a21, a11, tA, k); add(b11, b12, tB, k);
-        strassen_recursive(tA, tB, p6, k);
-        free_matrix(tA); free_matrix(tB);
-    }
-    #pragma omp task shared(a12, a22, b21, b22, p7)
-    {
-        int *tA = allocate_matrix(k), *tB = allocate_matrix(k);
-        sub(a12, a22, tA, k); add(b21, b22, tB, k);
-        strassen_recursive(tA, tB, p7, k);
-        free_matrix(tA); free_matrix(tB);
-    }
-    #pragma omp taskwait
+   
+    int *tA = allocate_matrix(k), *tB = allocate_matrix(k);
+    add(a11, a22, tA, k); add(b11, b22, tB, k);
+    strassen_recursive(tA, tB, p1, k);
+    free_matrix(tA); free_matrix(tB);
+
+    tA = allocate_matrix(k);
+    add(a21, a22, tA, k); strassen_recursive(tA, b11, p2, k); free_matrix(tA);
+
+    tB = allocate_matrix(k);
+    sub(b12, b22, tB, k); strassen_recursive(a11, tB, p3, k); free_matrix(tB);
+
+    tB = allocate_matrix(k);
+    sub(b21, b11, tB, k); strassen_recursive(a22, tB, p4, k); free_matrix(tB);
+
+
+    tA = allocate_matrix(k);
+    add(a11, a12, tA, k); strassen_recursive(tA, b22, p5, k); free_matrix(tA);
+
+
+    tA = allocate_matrix(k), tB = allocate_matrix(k);
+    sub(a21, a11, tA, k); add(b11, b12, tB, k);
+    strassen_recursive(tA, tB, p6, k);
+    free_matrix(tA); free_matrix(tB);
+
+
+    tA = allocate_matrix(k), tB = allocate_matrix(k);
+    sub(a12, a22, tA, k); add(b21, b22, tB, k);
+    strassen_recursive(tA, tB, p7, k);
+    free_matrix(tA); free_matrix(tB);
+    
 
     #pragma omp parallel for
     for (int i = 0; i < k; i++) {
@@ -300,6 +289,12 @@ int main(int argc, char** argv) {
 
     int* A = allocate_matrix(n);
     int* B = allocate_matrix(n);
+
+    // print memory size of A
+    if(p_rank == 0){
+        cout << "Matrix size: " << n << " x " << n << endl;
+        cout << "Memory size of A: " << sizeof(int) * n * n / (1024.0 * 1024.0) << " MB" << endl;
+    }
 
     MPI_Bcast(A, n*n, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
