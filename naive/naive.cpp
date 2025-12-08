@@ -203,7 +203,9 @@ int main(int argc, char **argv)
     // 1. Create original matrices A and B
     std::cout << "Allocating and initializing matrices..." << std::endl;
     int *matrix_A = createRandomMatrix(N_size, N_size);
+    saveMatrixToCSV(matrix_A, N_size, N_size, "a.csv");
     int *matrix_B = createRandomMatrix(N_size, N_size);
+    saveMatrixToCSV(matrix_B, N_size, N_size, "b.csv");
 
     // 2. Transpose matrix B (O(N^2) operation - very fast)
     std::cout << "Transposing matrix B for cache optimization..." << std::endl;
@@ -225,6 +227,7 @@ int main(int argc, char **argv)
     std::cout << "Optimized Multiplication Time: " << float(multi_time.count()) / 1000.0 << " seconds" << std::endl;
     std::cout << "Total Runtime (Transp. + Mult.): " << float(total_time.count()) / 1000.0 << " seconds" << std::endl;
     std::cout << "-----------------------------------------------" << std::endl;
+    saveMatrixToCSV(matrix_C, N_size, N_size, "c.csv");
 
     // 4. Cleanup
     deleteMatrix(matrix_A);
