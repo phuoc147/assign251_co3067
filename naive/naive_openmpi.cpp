@@ -253,16 +253,12 @@ int main(int argc, char** argv) {
         saveMatrixToCSV(matrix_C, N_size, N_size, "c.csv");
         std::cout << "Multiplication completed. Result in c.csv" << std::endl;
         delete[] matrix_C;
-        // printMatrix(matrix_C, N_size, N_size);
+
+        long seconds = end.tv_sec - start.tv_sec;
+        long microseconds = end.tv_usec - start.tv_usec;
+        double elapsed = seconds + microseconds * 1e-6;
+        printf("Parallel Execution Time: %f seconds\n", elapsed);
     }
-
-    // syncronize
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    long seconds = end.tv_sec - start.tv_sec;
-    long microseconds = end.tv_usec - start.tv_usec;
-    double elapsed = seconds + microseconds * 1e-6;
-    printf("Parallel Execution Time on process %d: %f seconds\n", rank, elapsed);
 
     MPI_Finalize();
 
