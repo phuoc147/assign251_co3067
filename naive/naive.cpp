@@ -210,19 +210,20 @@ int main(int argc, char **argv)
     auto start_transpose = std::chrono::high_resolution_clock::now();
     int *matrix_B_T = transposeMatrix(matrix_B, N_size);
     auto end_transpose = std::chrono::high_resolution_clock::now();
-    auto transpose_time = std::chrono::duration_cast<std::chrono::seconds>(end_transpose - start_transpose);
-    std::cout << "Transpose time: " << transpose_time.count() << " seconds" << std::endl;
+    auto transpose_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_transpose - start_transpose);
+    std::cout << "Transpose time: " << float(transpose_time.count()) / 1000.0 << " seconds" << std::endl;
 
     // 3. Perform optimized multiplication (A * B = A * B^T)
     std::cout << "Starting optimized matrix multiplication (A * B)..." << std::endl;
     auto start_multi = std::chrono::high_resolution_clock::now();
     int *matrix_C = multiplyMatrix_Optimized(matrix_A, matrix_B_T, N_size);
     auto end_multi = std::chrono::high_resolution_clock::now();
-    auto multi_time = std::chrono::duration_cast<std::chrono::seconds>(end_multi - start_multi);
+    auto multi_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_multi - start_multi);
+    auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_multi - start_transpose);
 
     std::cout << "-----------------------------------------------" << std::endl;
-    std::cout << "Optimized Multiplication Time: " << multi_time.count() << " seconds" << std::endl;
-    std::cout << "Total Runtime (Transp. + Mult.): " << (end_multi - start_transpose) << " seconds" << std::endl;
+    std::cout << "Optimized Multiplication Time: " << float(multi_time.count()) / 1000.0 << " seconds" << std::endl;
+    std::cout << "Total Runtime (Transp. + Mult.): " << float(total_time.count()) / 1000.0 << " seconds" << std::endl;
     std::cout << "-----------------------------------------------" << std::endl;
 
     // 4. Cleanup
