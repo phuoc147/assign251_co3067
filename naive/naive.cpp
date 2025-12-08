@@ -5,6 +5,8 @@
 #include <string>
 #include <omp.h>
 #include <stdexcept>
+#include <chrono>
+#include <thread>
 
 // Global constants for clearer indexing
 #define IDX(i, j, cols) ((i) * (cols) + (j))
@@ -205,27 +207,27 @@ int main(int argc, char **argv)
 
     // 2. Transpose matrix B (O(N^2) operation - very fast)
     std::cout << "Transposing matrix B for cache optimization..." << std::endl;
-    double start_transpose = omp_get_wtime();
+    auto start_transpose = std::chrono::high_resolution_clock::now();
     int *matrix_B_T = transposeMatrix(matrix_B, N_size);
-    double end_transpose = omp_get_wtime();
-    std::cout << "Transpose time: " << (end_transpose - start_transpose) << " seconds" << std::endl;
+    auto end_transpose = std::chrono::high_resolution_clock::now();
+    auto transpose_time = std::chrono::duration_cast<std::chrono::seconds>(end_transpose - start_transpose);
+    std::cout << "Transpose time: " << transpose_time.count() << " seconds" << std::endl;
 
     // 3. Perform optimized multiplication (A * B = A * B^T)
     std::cout << "Starting optimized matrix multiplication (A * B)..." << std::endl;
-    double start_multiply = omp_get_wtime();
+    auto start_multi = std::chrono::high_resolution_clock::now();
     int *matrix_C = multiplyMatrix_Optimized(matrix_A, matrix_B_T, N_size);
-    double end_multiply = omp_get_wtime();
+    auto end_multi = std::chrono::high_resolution_clock::now();
+    auto multi_time = std::chrono::duration_cast<std::chrono::seconds>(end_multi - start_multi);
 
-    double elapsed_time = end_multiply - start_multiply;
     std::cout << "-----------------------------------------------" << std::endl;
-    std::cout << "Optimized Multiplication Time: " << elapsed_time << " seconds" << std::endl;
-    std::cout << "Total Runtime (Transp. + Mult.): " << (end_multiply - start_transpose) << " seconds" << std::endl;
+    std::cout << "Optimized Multiplication Time: " << multi_time.count() << " seconds" << std::endl;
+    std::cout << "Total Runtime (Transp. + Mult.): " << (end_multi - start_transpose) << " seconds" << std::endl;
     std::cout << "-----------------------------------------------" << std::endl;
 
     // 4. Cleanup
     deleteMatrix(matrix_A);
     deleteMatrix(matrix_B); // Delete original B
-    // deleteMatrix(matrix_B_T); // Delete B_T
     deleteMatrix(matrix_C);
 
     return 0;
