@@ -1,0 +1,14 @@
+MPI-node1   slots=8
+MPI-node2   slots=8
+MPI-node3   slots=8
+MPI-node4   slots=8
+MPI-node5   slots=8
+MPI-node6   slots=8
+MPI-node7   slots=8
+MPI-node8   slots=8
+MPI-node9   slots=8
+MPI-node10  slots=8
+MPI-node11  slots=8
+MPI-node12  slots=8
+MPI-node13  slots=8
+MPI-node14  slots=8
