@@ -211,11 +211,10 @@ int main(int argc, char** argv) {
 
     // -- 5. multiplication
     int* matrix_C_part = new int[row_share * N_size];
-    std::cout << "Multiplying on rank " << rank << std::endl;
+    // std::cout << "Multiplying on rank " << rank << std::endl;
     matrix_C_part = multiplication(matrix_A_part, matrix_B_T, row_share, N_size);
-    std::cout << "Finish multiplying on rank " << rank << std::endl;
+    // std::cout << "Finish multiplying on rank " << rank << std::endl;
     // std::cout << "Process " << rank << " calculated matrix C part: " << std::endl;
-    // printMatrix(matrix_C_part, row_share, N_size);
 
     // syncronize
     MPI_Barrier(MPI_COMM_WORLD);
