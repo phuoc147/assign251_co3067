@@ -125,6 +125,11 @@ int* multiplyMatrix_Optimized(int* matrix_A, int* matrix_B_T, int size){
     int* matrix_C = new int[size * size];
     #pragma omp parallel for
     for (int i = 0; i < size; i++) {
+
+        if (i == 0) {
+            std::cout << "OpenMP is using " << omp_get_num_threads() << " threads" << std::endl;
+        }
+
         for (int j = 0; j < size; j++) {
             int sum = 0;
             for (int k = 0; k < size; k++) { 
@@ -186,7 +191,6 @@ int main(int argc, char** argv) {
 
     // 3. Perform optimized multiplication (A * B = A * B^T)
     std::cout << "Starting optimized matrix multiplication (A * B)..." << std::endl;
-    std::cout << "OpenMP is using " << omp_get_num_threads() << " threads" << std::endl;
     double start_multiply = omp_get_wtime();
     int *matrix_C = multiplyMatrix_Optimized(matrix_A, matrix_B_T, N_size);
     double end_multiply = omp_get_wtime();
