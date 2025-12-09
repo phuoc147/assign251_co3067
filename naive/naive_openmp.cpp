@@ -186,6 +186,7 @@ int main(int argc, char** argv) {
 
     // 3. Perform optimized multiplication (A * B = A * B^T)
     std::cout << "Starting optimized matrix multiplication (A * B)..." << std::endl;
+    std::cout << "OpenMP is using " << omp_get_num_threads() << " threads" << std::endl;
     double start_multiply = omp_get_wtime();
     int *matrix_C = multiplyMatrix_Optimized(matrix_A, matrix_B_T, N_size);
     double end_multiply = omp_get_wtime();
