@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
 
     int* matrix_A = nullptr;
     int* matrix_B = nullptr;
-    int* matrix_B_T = nullptr; 
+    int* matrix_B_T = nullptr;
     int* matrix_C = nullptr;
     
     // -- 2. initialize data for 2 matrix
@@ -211,11 +211,10 @@ int main(int argc, char** argv) {
 
     // -- 5. multiplication
     int* matrix_C_part = new int[row_share * N_size];
-    std::cout << "Multiplying on rank " << rank << std::endl;
+    // std::cout << "Multiplying on rank " << rank << std::endl;
     matrix_C_part = multiplication(matrix_A_part, matrix_B_T, row_share, N_size);
-    std::cout << "Finish multiplying on rank " << rank << std::endl;
+    // std::cout << "Finish multiplying on rank " << rank << std::endl;
     // std::cout << "Process " << rank << " calculated matrix C part: " << std::endl;
-    // printMatrix(matrix_C_part, row_share, N_size);
 
     // syncronize
     MPI_Barrier(MPI_COMM_WORLD);
@@ -254,16 +253,12 @@ int main(int argc, char** argv) {
         saveMatrixToCSV(matrix_C, N_size, N_size, "c.csv");
         std::cout << "Multiplication completed. Result in c.csv" << std::endl;
         delete[] matrix_C;
-        // printMatrix(matrix_C, N_size, N_size);
+
+        long seconds = end.tv_sec - start.tv_sec;
+        long microseconds = end.tv_usec - start.tv_usec;
+        double elapsed = seconds + microseconds * 1e-6;
+        printf("Parallel Execution Time: %f seconds\n", elapsed);
     }
-
-    // syncronize
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    long seconds = end.tv_sec - start.tv_sec;
-    long microseconds = end.tv_usec - start.tv_usec;
-    double elapsed = seconds + microseconds * 1e-6;
-    printf("Parallel Execution Time on process %d: %f seconds\n", rank, elapsed);
 
     MPI_Finalize();
 

@@ -83,24 +83,23 @@ int* transposeMatrix(int* matrix, int size) {
 
 int* multiplication(int* matrix_A, int* matrix_B_T, int rows, int cols) {
     int* matrix_C_part = new int[rows * cols];
-    #pragma omp parallel
-    {
-        #pragma omp master 
-            {
-                int rank;
-                MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-                std::cout << "MPI Rank " << rank << " is using " 
-                          << omp_get_num_threads() << " OpenMP thread(s)." << std::endl;
+    
+    // 1. Create the parallel team AND distribute the work (i-loop)
+    #pragma omp parallel for
+    for (int i = 0; i < rows; i++) {
+        if (i == 0) {
+            int rank;
+            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+            std::cout << "MPI Rank " << rank << " is using " 
+                      << omp_get_num_threads() << " OpenMP thread(s)." << std::endl;
+        }
+        
+        for (int j = 0; j < cols; j++) {
+            int sum = 0;
+            for (int k = 0; k < cols; k++) {
+                sum += matrix_A[IDX(i, k, cols)] * matrix_B_T[IDX(j, k, cols)];
             }
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j++) {
-                
-                int sum = 0;
-                for (int k = 0; k < cols; k++) {
-                    sum += matrix_A[IDX(i, k, cols)] * matrix_B_T[IDX(j, k, cols)];
-                }
-                matrix_C_part[IDX(i, j, cols)] = sum;
-            }
+            matrix_C_part[IDX(i, j, cols)] = sum;
         }
     }
     return matrix_C_part;
@@ -227,11 +226,9 @@ int main(int argc, char** argv) {
 
     // -- 5. multiplication
     int* matrix_C_part = new int[row_share * N_size];
-    std::cout << "Multiplying on rank " << rank << std::endl;
+    // std::cout << "Multiplying on rank " << rank << std::endl;
     matrix_C_part = multiplication(matrix_A_part, matrix_B_T, row_share, N_size);
-    std::cout << "Finish multiplying on rank " << rank << std::endl;
-    // std::cout << "Process " << rank << " calculated matrix C part: " << std::endl;
-    // printMatrix(matrix_C_part, row_share, N_size);
+    // std::cout << "Finish multiplying on rank " << rank << std::endl;
 
     // syncronize
     MPI_Barrier(MPI_COMM_WORLD);
@@ -271,15 +268,12 @@ int main(int argc, char** argv) {
         std::cout << "Multiplication completed. Result in c.csv" << std::endl;
         delete[] matrix_C;
         // printMatrix(matrix_C, N_size, N_size);
+        
+        long seconds = end.tv_sec - start.tv_sec;
+        long microseconds = end.tv_usec - start.tv_usec;
+        double elapsed = seconds + microseconds * 1e-6;
+        printf("Parallel Execution Time on process %d: %f seconds\n", rank, elapsed);
     }
-
-    // syncronize
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    long seconds = end.tv_sec - start.tv_sec;
-    long microseconds = end.tv_usec - start.tv_usec;
-    double elapsed = seconds + microseconds * 1e-6;
-    printf("Parallel Execution Time on process %d: %f seconds\n", rank, elapsed);
 
     MPI_Finalize();
 
