@@ -12,8 +12,19 @@
 using namespace std;
 
 // --- CẤU HÌNH ---
-const int CUTOFF = 128;
+const int CUTOFF = 64;
 
+void store_matrix_to_csv(const string& filename, const int* M, int n) {
+    ofstream file(filename);
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            file << M[i * n + j];
+            if (j < n - 1) file << ",";
+        }
+        file << "\n";
+    }
+    file.close();
+}
 // --- PHẦN 1: QUẢN LÝ BỘ NHỚ ---
 
 int* allocate_matrix(int n) {
@@ -300,6 +311,7 @@ int main(int argc, char** argv) {
 
     int* A = allocate_matrix(n);
     int* B = allocate_matrix(n);
+
 
     // print memory size of A
     if(p_rank == 0){
