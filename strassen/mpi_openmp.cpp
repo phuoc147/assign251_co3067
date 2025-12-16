@@ -8,7 +8,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdlib>
-
+#include <random>
 using namespace std;
 
 // --- CONFIGURATION ---
@@ -48,9 +48,32 @@ float* allocate_empty(int n) { return new float[n * n](); }
 
 float* allocate_random(int n) {
     float* M = new float[n * n];
-    for (int i = 0; i < n * n; i++) {
-        // Generate random float between -5.0 and 5.0
-        M[i] = ((float)rand() / RAND_MAX) * 10.0f - 5.0f; 
+
+    // Threshold: Only parallelize for N >= 1024 (1 million elements)
+    if (n < 1024) {
+        // Sequential for small matrices (faster than spawning threads)
+        // Using standard rand() here is fine and simple for small data
+        for (int i = 0; i < n * n; i++) {
+            M[i] = (float)rand() / RAND_MAX; 
+        }
+    } 
+    else {
+        // Parallel for large matrices
+        #pragma omp parallel
+        {
+            // 1. Create a thread-local random engine
+            // This initializes ONCE per thread, not per iteration
+            std::mt19937 engine(1234 + omp_get_thread_num()); 
+            
+            // 2. Define the distribution [0.0, 1.0)
+            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+            // 3. Parallel fill
+            #pragma omp for
+            for (int i = 0; i < n * n; i++) {
+                M[i] = dist(engine);
+            }
+        }
     }
     return M;
 }
@@ -387,6 +410,11 @@ int main(int argc, char** argv) {
     MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
+    char hostname[MPI_MAX_PROCESSOR_NAME];
+    int len;
+    MPI_Get_processor_name(hostname, &len);
+    printf("Rank %d of %d running on Host: %s\n", rank, num_procs, hostname);
 
     srand(time(NULL) + rank);
 
