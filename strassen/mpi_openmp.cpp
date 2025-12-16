@@ -208,7 +208,7 @@ std::vector<int> find_best_workers(int num_procs, int my_rank) {
 
 // --- HANDLERS ---
 void assemble_and_send(long matrix_id, TaskState& state, int my_rank) {
-    log_debug(my_rank, "Assembling Result for ID " + to_string(matrix_id));
+    // log_debug(my_rank, "Assembling Result for ID " + to_string(matrix_id));
     int n = state.n;
     int k = n / 2;
     float* C = allocate_empty(n);
@@ -239,12 +239,12 @@ void assemble_and_send(long matrix_id, TaskState& state, int my_rank) {
 }
 
 void handle_new_work(int source, long matrix_id, int n, float* A, float* B, int my_rank, int num_procs) {
-    log_debug(my_rank, "Received Work ID " + to_string(matrix_id) + " Size " + to_string(n));
+    // log_debug(my_rank, "Received Work ID " + to_string(matrix_id) + " Size " + to_string(n));
     my_current_memory += (2L * n * n);
     broadcast_memory_update(my_rank);
 
     if (n <= CUTOFF) {
-        log_debug(my_rank, "Computing Base Case ID " + to_string(matrix_id));
+        // log_debug(my_rank, "Computing Base Case ID " + to_string(matrix_id));
         float* C = allocate_empty(n);
         multiply_std(A, B, C, n);
         
@@ -261,7 +261,7 @@ void handle_new_work(int source, long matrix_id, int n, float* A, float* B, int 
     std::vector<int> targets = find_best_workers(num_procs, my_rank);
     
     if (targets.size() < 7 || n < MPI_RECURSION_LIMIT) {
-        log_debug(my_rank, "Switching to LOCAL Recursion for ID " + to_string(matrix_id));
+        // log_debug(my_rank, "Switching to LOCAL Recursion for ID " + to_string(matrix_id));
         float* C = allocate_empty(n);
         local_strassen_recursive(A, B, C, n); 
         
@@ -275,7 +275,7 @@ void handle_new_work(int source, long matrix_id, int n, float* A, float* B, int 
         return;
     }
 
-    log_debug(my_rank, "Distributing ID " + to_string(matrix_id) + " to peers.");
+    // log_debug(my_rank, "Distributing ID " + to_string(matrix_id) + " to peers.");
     TaskState state;
     state.n = n;
     state.parent_rank = source;
