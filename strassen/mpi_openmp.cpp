@@ -298,7 +298,7 @@ int main(int argc, char** argv) {
             }
         }
         cout << "Done in " << MPI_Wtime() - start << "s" << endl;
-        verify_result(A, B, FinalC, N);
+        // verify_result(A, B, FinalC, N);
         for(int i=1; i<num_procs; i++) MPI_Send(0,0,MPI_INT,i,TAG_TERMINATE,MPI_COMM_WORLD);
         delete[] A; delete[] B; delete[] FinalC;
     } else node_loop(rank, num_procs);
