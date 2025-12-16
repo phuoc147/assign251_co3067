@@ -388,24 +388,38 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
 
-    int buf_size = 512 * 1024 * 1024; 
-    void* buffer = malloc(buf_size);
-    MPI_Buffer_attach(buffer, buf_size);
-
     srand(time(NULL) + rank);
 
     if (num_procs < 2) {
         if (rank == 0) cout << "Error: Run with -np 2 or more." << endl;
-        MPI_Buffer_detach(&buffer, &buf_size);
-        free(buffer);
         MPI_Finalize();
         return 0;
     }
+
+    // [CHANGE 1] We declare buffer pointers here but don't allocate yet
+    void* buffer = nullptr;
+    int buf_size = 0;
 
     if (rank == 0) {
         int N;
         cout << "Enter N (e.g. 1024): ";
         cin >> N;
+        
+
+        long long needed_size = 16LL * (N / 2) * (N / 2) * sizeof(float);
+        
+        // Safety check for MPI's int limit (2GB)
+        if (needed_size > 2000000000LL) {
+            //raise runtime_error("Error: "
+            cout << "Error: Problem size too large for MPI buffered send (exceeds 2GB buffer limit)." << endl;
+        }
+        
+        buf_size = (int)needed_size;
+
+        cout << "[Info] Allocating Bsend buffer: " << (buf_size / 1024 / 1024) << " MB" << endl;
+        buffer = malloc(buf_size);
+        MPI_Buffer_attach(buffer, buf_size);
+
         float* A = allocate_random(N);
         float* B = allocate_random(N);
         
@@ -424,6 +438,7 @@ int main(int argc, char** argv) {
         float* FinalC = allocate_empty(N);
         bool done = false;
 
+        // ... [Rest of Rank 0 code is same] ...
         while (!done) {
             MPI_Status status;
             MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -458,15 +473,21 @@ int main(int argc, char** argv) {
 
         double end = MPI_Wtime();
         cout << "Time: " << end - start << "s" << endl;
-        
-        // VERIFY RESULT HERE
         // verify_result(A, B, FinalC, N);
-
         for (int i = 1; i < num_procs; i++) MPI_Send(NULL, 0, MPI_INT, i, TAG_TERMINATE, MPI_COMM_WORLD);
         
         free_m(A); free_m(B); free_m(FinalC);
     } 
     else {
+        // [CHANGE 4] Workers also need a buffer! 
+        // Since we don't know N yet, we just allocate a safe large amount (e.g., 1.5GB)
+        // or we wait to receive a task.
+        // For simplicity: Allocate 1.5GB static for workers.
+        
+        buf_size = 1500 * 1024 * 1024; // 1.5 GB
+        buffer = malloc(buf_size);
+        MPI_Buffer_attach(buffer, buf_size);
+        
         node_loop(rank, num_procs);
     }
 
