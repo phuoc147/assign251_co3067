@@ -12,8 +12,8 @@
 using namespace std;
 
 // --- CONFIGURATION ---
-const int CUTOFF = 128; 
-const int MPI_RECURSION_LIMIT = 512; // Must be < N to trigger distribution
+const int CUTOFF = 256; 
+const int MPI_RECURSION_LIMIT = 512; 
 const int TAG_WORK = 0;
 const int TAG_RESULT = 1;
 const int TAG_MEM_UPDATE = 4;
@@ -22,7 +22,7 @@ const int TAG_TERMINATE = 99;
 // --- GLOBAL STATE ---
 struct TaskState {
     int count;             
-    int* results[7];       
+    float* results[7];       
     int n;                 
     int parent_rank;       
 
@@ -40,54 +40,82 @@ long my_current_memory = 0;
 
 // --- HELPERS ---
 void log_debug(int rank, string msg) {
-    // [ENABLED] Printing to stdout
     printf("[DEBUG] Rank %d: %s\n", rank, msg.c_str());
-    fflush(stdout); // Force print immediately
+    fflush(stdout);
 }
 
-int* allocate_empty(int n) { return new int[n * n](); }
+float* allocate_empty(int n) { return new float[n * n](); }
 
-int* allocate_random(int n) {
-    int* M = new int[n * n];
-    for (int i = 0; i < n * n; i++) M[i] = rand() % 5;
+float* allocate_random(int n) {
+    float* M = new float[n * n];
+    for (int i = 0; i < n * n; i++) {
+        // Generate random float between -5.0 and 5.0
+        M[i] = ((float)rand() / RAND_MAX) * 10.0f - 5.0f; 
+    }
     return M;
 }
 
-void free_m(int* m) { if (m) delete[] m; }
+void free_m(float* m) { if (m) delete[] m; }
 
 // --- MATH KERNELS ---
-void add(const int* A, const int* B, int* C, int n) {
+void add(const float* A, const float* B, float* C, int n) {
     #pragma omp parallel for
     for (int i = 0; i < n * n; i++) C[i] = A[i] + B[i];
 }
 
-void sub(const int* A, const int* B, int* C, int n) {
+void sub(const float* A, const float* B, float* C, int n) {
     #pragma omp parallel for
     for (int i = 0; i < n * n; i++) C[i] = A[i] - B[i];
 }
 
-void multiply_std(const int* A, const int* B, int* C, int n) {
-    memset(C, 0, n * n * sizeof(int));
+void multiply_std(const float* A, const float* B, float* C, int n) {
+    memset(C, 0, n * n * sizeof(float));
     #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         for (int k = 0; k < n; k++) {
-            int temp = A[i * n + k];
+            float temp = A[i * n + k];
             for (int j = 0; j < n; j++) C[i * n + j] += temp * B[k * n + j];
         }
     }
 }
 
+// --- VERIFICATION KERNEL ---
+void verify_result(const float* A, const float* B, const float* C, int n) {
+    cout << "--- Verifying Result (Checking 10 random spots) ---" << endl;
+    bool pass = true;
+    for(int k=0; k<10; k++) {
+        int r = rand() % n;
+        int c = rand() % n;
+        float sum = 0.0f;
+        for(int i=0; i<n; i++) {
+            sum += A[r * n + i] * B[i * n + c];
+            cout << A[r * n + i] << " * " << B[i * n + c] << " = " << A[r * n + i] * B[i * n + c] << endl;
+        }
+        cout << "Sum: " << sum << ", C[" << r << "][" << c << "] = " << C[r * n + c] << endl;
+        float diff = fabs(sum - C[r * n + c]);
+        // Strassen error can grow slightly, so we use a loose epsilon
+        if (diff > 0.1f) { 
+            cout << "[FAIL] At (" << r << "," << c << ") Expected: " << sum << " Got: " << C[r*n+c] << endl;
+            pass = false;
+        } else {
+            // cout << "[OK] (" << r << "," << c << ") Matches." << endl;
+        }
+    }
+    if (pass) cout << "SUCCESS: Result verification passed!" << endl;
+    else cout << "FAILURE: Result verification failed." << endl;
+}
+
 // --- LOCAL STRASSEN ---
-void local_strassen_recursive(int* A, int* B, int* C, int n) {
+void local_strassen_recursive(float* A, float* B, float* C, int n) {
     if (n <= CUTOFF) {
         multiply_std(A, B, C, n);
         return;
     }
     int k = n / 2;
-    int *a11 = allocate_empty(k), *a12 = allocate_empty(k), *a21 = allocate_empty(k), *a22 = allocate_empty(k);
-    int *b11 = allocate_empty(k), *b12 = allocate_empty(k), *b21 = allocate_empty(k), *b22 = allocate_empty(k);
-    int *p1 = allocate_empty(k), *p2 = allocate_empty(k), *p3 = allocate_empty(k), *p4 = allocate_empty(k);
-    int *p5 = allocate_empty(k), *p6 = allocate_empty(k), *p7 = allocate_empty(k);
+    float *a11 = allocate_empty(k), *a12 = allocate_empty(k), *a21 = allocate_empty(k), *a22 = allocate_empty(k);
+    float *b11 = allocate_empty(k), *b12 = allocate_empty(k), *b21 = allocate_empty(k), *b22 = allocate_empty(k);
+    float *p1 = allocate_empty(k), *p2 = allocate_empty(k), *p3 = allocate_empty(k), *p4 = allocate_empty(k);
+    float *p5 = allocate_empty(k), *p6 = allocate_empty(k), *p7 = allocate_empty(k);
 
     #pragma omp parallel for collapse(2)
     for (int i = 0; i < k; i++) {
@@ -104,19 +132,19 @@ void local_strassen_recursive(int* A, int* B, int* C, int n) {
         #pragma omp single
         {
             #pragma omp task
-            { int *tA = allocate_empty(k), *tB = allocate_empty(k); add(a11, a22, tA, k); add(b11, b22, tB, k); local_strassen_recursive(tA, tB, p1, k); free_m(tA); free_m(tB); }
+            { float *tA = allocate_empty(k), *tB = allocate_empty(k); add(a11, a22, tA, k); add(b11, b22, tB, k); local_strassen_recursive(tA, tB, p1, k); free_m(tA); free_m(tB); }
             #pragma omp task
-            { int *tA = allocate_empty(k); add(a21, a22, tA, k); local_strassen_recursive(tA, b11, p2, k); free_m(tA); }
+            { float *tA = allocate_empty(k); add(a21, a22, tA, k); local_strassen_recursive(tA, b11, p2, k); free_m(tA); }
             #pragma omp task
-            { int *tB = allocate_empty(k); sub(b12, b22, tB, k); local_strassen_recursive(a11, tB, p3, k); free_m(tB); }
+            { float *tB = allocate_empty(k); sub(b12, b22, tB, k); local_strassen_recursive(a11, tB, p3, k); free_m(tB); }
             #pragma omp task
-            { int *tB = allocate_empty(k); sub(b21, b11, tB, k); local_strassen_recursive(a22, tB, p4, k); free_m(tB); }
+            { float *tB = allocate_empty(k); sub(b21, b11, tB, k); local_strassen_recursive(a22, tB, p4, k); free_m(tB); }
             #pragma omp task
-            { int *tA = allocate_empty(k); add(a11, a12, tA, k); local_strassen_recursive(tA, b22, p5, k); free_m(tA); }
+            { float *tA = allocate_empty(k); add(a11, a12, tA, k); local_strassen_recursive(tA, b22, p5, k); free_m(tA); }
             #pragma omp task
-            { int *tA = allocate_empty(k), *tB = allocate_empty(k); sub(a21, a11, tA, k); add(b11, b12, tB, k); local_strassen_recursive(tA, tB, p6, k); free_m(tA); free_m(tB); }
+            { float *tA = allocate_empty(k), *tB = allocate_empty(k); sub(a21, a11, tA, k); add(b11, b12, tB, k); local_strassen_recursive(tA, tB, p6, k); free_m(tA); free_m(tB); }
             #pragma omp task
-            { int *tA = allocate_empty(k), *tB = allocate_empty(k); sub(a12, a22, tA, k); add(b21, b22, tB, k); local_strassen_recursive(tA, tB, p7, k); free_m(tA); free_m(tB); }
+            { float *tA = allocate_empty(k), *tB = allocate_empty(k); sub(a12, a22, tA, k); add(b21, b22, tB, k); local_strassen_recursive(tA, tB, p7, k); free_m(tA); free_m(tB); }
         }
     }
 
@@ -154,7 +182,6 @@ std::vector<int> find_best_workers(int num_procs, int my_rank) {
         }
     }
     
-    // Shuffle equal values to prevent Thundering Herd on Rank 2
     std::random_shuffle(sorted_nodes.begin(), sorted_nodes.end());
     std::stable_sort(sorted_nodes.begin(), sorted_nodes.end(), 
         [](const std::pair<long, int>& a, const std::pair<long, int>& b) {
@@ -181,11 +208,11 @@ std::vector<int> find_best_workers(int num_procs, int my_rank) {
 
 // --- HANDLERS ---
 void assemble_and_send(long matrix_id, TaskState& state, int my_rank) {
-    // log_debug(my_rank, "Assembling Result for ID " + to_string(matrix_id));
+    log_debug(my_rank, "Assembling Result for ID " + to_string(matrix_id));
     int n = state.n;
     int k = n / 2;
-    int* C = allocate_empty(n);
-    int* p[7];
+    float* C = allocate_empty(n);
+    float* p[7];
     for (int i = 0; i < 7; i++) p[i] = state.results[i];
 
     #pragma omp parallel for collapse(2)
@@ -200,7 +227,7 @@ void assemble_and_send(long matrix_id, TaskState& state, int my_rank) {
 
     MPI_Bsend(&matrix_id, 1, MPI_LONG, state.parent_rank, TAG_RESULT, MPI_COMM_WORLD);
     MPI_Bsend(&n, 1, MPI_INT, state.parent_rank, TAG_RESULT, MPI_COMM_WORLD);
-    MPI_Bsend(C, n * n, MPI_INT, state.parent_rank, TAG_RESULT, MPI_COMM_WORLD);
+    MPI_Bsend(C, n * n, MPI_FLOAT, state.parent_rank, TAG_RESULT, MPI_COMM_WORLD);
 
     free_m(C);
     for (int i = 0; i < 7; i++) free_m(state.results[i]);
@@ -211,19 +238,19 @@ void assemble_and_send(long matrix_id, TaskState& state, int my_rank) {
     broadcast_memory_update(my_rank);
 }
 
-void handle_new_work(int source, long matrix_id, int n, int* A, int* B, int my_rank, int num_procs) {
-    // log_debug(my_rank, "Received Work ID " + to_string(matrix_id) + " Size " + to_string(n));
+void handle_new_work(int source, long matrix_id, int n, float* A, float* B, int my_rank, int num_procs) {
+    log_debug(my_rank, "Received Work ID " + to_string(matrix_id) + " Size " + to_string(n));
     my_current_memory += (2L * n * n);
     broadcast_memory_update(my_rank);
 
     if (n <= CUTOFF) {
-        // log_debug(my_rank, "Computing Base Case ID " + to_string(matrix_id));
-        int* C = allocate_empty(n);
+        log_debug(my_rank, "Computing Base Case ID " + to_string(matrix_id));
+        float* C = allocate_empty(n);
         multiply_std(A, B, C, n);
         
         MPI_Bsend(&matrix_id, 1, MPI_LONG, source, TAG_RESULT, MPI_COMM_WORLD);
         MPI_Bsend(&n, 1, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD);
-        MPI_Bsend(C, n * n, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD);
+        MPI_Bsend(C, n * n, MPI_FLOAT, source, TAG_RESULT, MPI_COMM_WORLD);
         
         free_m(C);
         my_current_memory -= (2L * n * n);
@@ -233,15 +260,14 @@ void handle_new_work(int source, long matrix_id, int n, int* A, int* B, int my_r
 
     std::vector<int> targets = find_best_workers(num_procs, my_rank);
     
-    // Switch to Local if limit reached or no peers
     if (targets.size() < 7 || n < MPI_RECURSION_LIMIT) {
-        // log_debug(my_rank, "Switching to LOCAL Recursion for ID " + to_string(matrix_id));
-        int* C = allocate_empty(n);
+        log_debug(my_rank, "Switching to LOCAL Recursion for ID " + to_string(matrix_id));
+        float* C = allocate_empty(n);
         local_strassen_recursive(A, B, C, n); 
         
         MPI_Bsend(&matrix_id, 1, MPI_LONG, source, TAG_RESULT, MPI_COMM_WORLD);
         MPI_Bsend(&n, 1, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD);
-        MPI_Bsend(C, n * n, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD);
+        MPI_Bsend(C, n * n, MPI_FLOAT, source, TAG_RESULT, MPI_COMM_WORLD);
         
         free_m(C);
         my_current_memory -= (2L * n * n);
@@ -249,15 +275,15 @@ void handle_new_work(int source, long matrix_id, int n, int* A, int* B, int my_r
         return;
     }
 
-    // log_debug(my_rank, "Distributing ID " + to_string(matrix_id) + " to peers.");
+    log_debug(my_rank, "Distributing ID " + to_string(matrix_id) + " to peers.");
     TaskState state;
     state.n = n;
     state.parent_rank = source;
     ongoing_tasks[matrix_id] = state;
 
     int k = n / 2;
-    int *a11 = allocate_empty(k), *a12 = allocate_empty(k), *a21 = allocate_empty(k), *a22 = allocate_empty(k);
-    int *b11 = allocate_empty(k), *b12 = allocate_empty(k), *b21 = allocate_empty(k), *b22 = allocate_empty(k);
+    float *a11 = allocate_empty(k), *a12 = allocate_empty(k), *a21 = allocate_empty(k), *a22 = allocate_empty(k);
+    float *b11 = allocate_empty(k), *b12 = allocate_empty(k), *b21 = allocate_empty(k), *b22 = allocate_empty(k);
 
     #pragma omp parallel for collapse(2)
     for (int i = 0; i < k; i++) {
@@ -272,40 +298,38 @@ void handle_new_work(int source, long matrix_id, int n, int* A, int* B, int my_r
     for (int i = 0; i < 7; i++) {
         int target_rank = targets[i];
         long child_id = (matrix_id * 7) + (i + 1);
-        int *TA = allocate_empty(k), *TB = allocate_empty(k);
+        float *TA = allocate_empty(k), *TB = allocate_empty(k);
 
         if (i == 0) { add(a11, a22, TA, k); add(b11, b22, TB, k); }      
-        else if (i == 1) { add(a21, a22, TA, k); memcpy(TB, b11, k*k*sizeof(int)); } 
-        else if (i == 2) { memcpy(TA, a11, k*k*sizeof(int)); sub(b12, b22, TB, k); } 
-        else if (i == 3) { memcpy(TA, a22, k*k*sizeof(int)); sub(b21, b11, TB, k); } 
-        else if (i == 4) { add(a11, a12, TA, k); memcpy(TB, b22, k*k*sizeof(int)); } 
+        else if (i == 1) { add(a21, a22, TA, k); memcpy(TB, b11, k*k*sizeof(float)); } 
+        else if (i == 2) { memcpy(TA, a11, k*k*sizeof(float)); sub(b12, b22, TB, k); } 
+        else if (i == 3) { memcpy(TA, a22, k*k*sizeof(float)); sub(b21, b11, TB, k); } 
+        else if (i == 4) { add(a11, a12, TA, k); memcpy(TB, b22, k*k*sizeof(float)); } 
         else if (i == 5) { sub(a21, a11, TA, k); add(b11, b12, TB, k); } 
         else if (i == 6) { sub(a12, a22, TA, k); add(b21, b22, TB, k); } 
 
         MPI_Bsend(&child_id, 1, MPI_LONG, target_rank, TAG_WORK, MPI_COMM_WORLD);
         MPI_Bsend(&k, 1, MPI_INT, target_rank, TAG_WORK, MPI_COMM_WORLD);
-        MPI_Bsend(TA, k * k, MPI_INT, target_rank, TAG_WORK, MPI_COMM_WORLD);
-        MPI_Bsend(TB, k * k, MPI_INT, target_rank, TAG_WORK, MPI_COMM_WORLD);
+        MPI_Bsend(TA, k * k, MPI_FLOAT, target_rank, TAG_WORK, MPI_COMM_WORLD);
+        MPI_Bsend(TB, k * k, MPI_FLOAT, target_rank, TAG_WORK, MPI_COMM_WORLD);
         free_m(TA); free_m(TB);
     }
     free_m(a11); free_m(a12); free_m(a21); free_m(a22);
     free_m(b11); free_m(b12); free_m(b21); free_m(b22);
 }
 
-void handle_result(long child_id, int k, int* M, int my_rank) {
+void handle_result(long child_id, int k, float* M, int my_rank) {
     long parent_id = (child_id - 1) / 7;
     int index = (child_id - 1) % 7;
     if (ongoing_tasks.find(parent_id) == ongoing_tasks.end()) return;
 
     TaskState& state = ongoing_tasks[parent_id];
     state.results[index] = allocate_empty(k);
-    memcpy(state.results[index], M, k * k * sizeof(int));
+    memcpy(state.results[index], M, k * k * sizeof(float));
     state.count++;
 
     my_current_memory += (k * k);
     broadcast_memory_update(my_rank);
-
-    // log_debug(my_rank, "Received Part " + to_string(index+1) + "/7 for ID " + to_string(parent_id));
 
     if (state.count == 7) {
         assemble_and_send(parent_id, state, my_rank);
@@ -326,9 +350,9 @@ void node_loop(int rank, int num_procs) {
             long mid; int n;
             MPI_Recv(&mid, 1, MPI_LONG, source, TAG_WORK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(&n, 1, MPI_INT, source, TAG_WORK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            int* A = allocate_empty(n); int* B = allocate_empty(n);
-            MPI_Recv(A, n * n, MPI_INT, source, TAG_WORK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(B, n * n, MPI_INT, source, TAG_WORK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            float* A = allocate_empty(n); float* B = allocate_empty(n);
+            MPI_Recv(A, n * n, MPI_FLOAT, source, TAG_WORK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(B, n * n, MPI_FLOAT, source, TAG_WORK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             
             handle_new_work(source, mid, n, A, B, rank, num_procs);
             free_m(A); free_m(B);
@@ -337,8 +361,8 @@ void node_loop(int rank, int num_procs) {
             long mid; int k;
             MPI_Recv(&mid, 1, MPI_LONG, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(&k, 1, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            int* M = allocate_empty(k);
-            MPI_Recv(M, k * k, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            float* M = allocate_empty(k);
+            MPI_Recv(M, k * k, MPI_FLOAT, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             
             handle_result(mid, k, M, rank);
             free_m(M);
@@ -382,8 +406,8 @@ int main(int argc, char** argv) {
         int N;
         cout << "Enter N (e.g. 1024): ";
         cin >> N;
-        int* A = allocate_random(N);
-        int* B = allocate_random(N);
+        float* A = allocate_random(N);
+        float* B = allocate_random(N);
         
         cout << "Master: Sending Start to Worker 1..." << endl;
         double start = MPI_Wtime();
@@ -393,11 +417,11 @@ int main(int argc, char** argv) {
         
         MPI_Bsend(&root_id, 1, MPI_LONG, worker_target, TAG_WORK, MPI_COMM_WORLD);
         MPI_Bsend(&N, 1, MPI_INT, worker_target, TAG_WORK, MPI_COMM_WORLD);
-        MPI_Bsend(A, N * N, MPI_INT, worker_target, TAG_WORK, MPI_COMM_WORLD);
-        MPI_Bsend(B, N * N, MPI_INT, worker_target, TAG_WORK, MPI_COMM_WORLD);
+        MPI_Bsend(A, N * N, MPI_FLOAT, worker_target, TAG_WORK, MPI_COMM_WORLD);
+        MPI_Bsend(B, N * N, MPI_FLOAT, worker_target, TAG_WORK, MPI_COMM_WORLD);
 
         node_memory.resize(num_procs, 0);
-        int* FinalC = allocate_empty(N);
+        float* FinalC = allocate_empty(N);
         bool done = false;
 
         while (!done) {
@@ -412,12 +436,12 @@ int main(int argc, char** argv) {
                 MPI_Recv(&k, 1, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 
                 if (mid == 0 && k == N) {
-                    MPI_Recv(FinalC, N * N, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(FinalC, N * N, MPI_FLOAT, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     cout << "Master: Received Final Result!" << endl;
                     done = true;
                 } else {
-                    int* dummy = allocate_empty(k);
-                    MPI_Recv(dummy, k*k, MPI_INT, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    float* dummy = allocate_empty(k);
+                    MPI_Recv(dummy, k*k, MPI_FLOAT, source, TAG_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     free_m(dummy);
                 }
             } else if (tag == TAG_MEM_UPDATE) {
@@ -434,6 +458,10 @@ int main(int argc, char** argv) {
 
         double end = MPI_Wtime();
         cout << "Time: " << end - start << "s" << endl;
+        
+        // VERIFY RESULT HERE
+        // verify_result(A, B, FinalC, N);
+
         for (int i = 1; i < num_procs; i++) MPI_Send(NULL, 0, MPI_INT, i, TAG_TERMINATE, MPI_COMM_WORLD);
         
         free_m(A); free_m(B); free_m(FinalC);
