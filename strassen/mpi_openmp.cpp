@@ -9,8 +9,8 @@
 
 using namespace std;
 
-const int CUTOFF = 256; 
-const int MPI_RECURSION_LIMIT = 1024; 
+const int CUTOFF = 64; 
+const int MPI_RECURSION_LIMIT = 2048; 
 const int TAG_WORK = 0;
 const int TAG_RESULT = 1;
 const int TAG_MEM_UPDATE = 4;
