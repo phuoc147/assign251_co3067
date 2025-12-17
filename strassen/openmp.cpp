@@ -161,7 +161,6 @@ void run_sequential_multiplication(const int* A, const int* B, int* C, int n) {
 }
 
 bool check_result(const int* C_Test, const int* C_Ref, int real_n, int pad_n) {
-    # pragma omp parallel for
     for (int i = 0; i < real_n; i++) {
         for (int j = 0; j < real_n; j++) {
             if (C_Test[i * pad_n + j] != C_Ref[i * pad_n + j]) return false;
