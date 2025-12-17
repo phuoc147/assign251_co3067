@@ -10,9 +10,9 @@
 
 using namespace std;
 
-const int CUTOFF = 64; 
+int CUTOFF = 64; 
 // Limit set to 4100 so 4096 blocks are solved locally
-const int MPI_RECURSION_LIMIT = 4100; 
+int MPI_RECURSION_LIMIT = 4100; 
 const int TAG_WORK = 0;
 const int TAG_RESULT = 1;
 const int TAG_MEM_UPDATE = 4;
@@ -349,6 +349,14 @@ void node_loop(int rank, int num_procs) {
 }
 
 int main(int argc, char** argv) {
+    // command line: mpirun -n <num_procs> ./mpi_openmp --mpi_recur_limit <limit> --cutoff <cutoff>
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--mpi_recur_limit") == 0 && i + 1 < argc) {
+            MPI_RECURSION_LIMIT = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--cutoff") == 0 && i + 1 < argc) {
+            CUTOFF = atoi(argv[++i]);
+        }
+    }
     int rank, num_procs, provided;
     MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
