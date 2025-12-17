@@ -18,7 +18,12 @@ int main() {
         ids.push_back(id);
     }
 
-    std::string file = "./mpi_openmp";
+    // GET file name from user
+    std::cout << "Enter file name to transfer: ";
+    std::string file;
+    std::getline(std::cin, file);
+    file = "./" + file;
+
     std::string remote_path =
         "/root/group_05/assign251_co3067/strassen/";
 
