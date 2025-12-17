@@ -47,20 +47,6 @@ void multiply_standard(const int* A, const int* B, int* C, int n, int stride) {
     }
 }
 
-// Nhân thường song song (Parallel Standard) - Tối ưu cache i-k-j + OpenMP
-void run_parallel_standard(const int* A, const int* B, int* C, int n) {
-    // Chỉ cần thêm pragma này để chia vòng lặp i cho các luồng
-    #pragma omp parallel for
-    for (int i = 0; i < n; i++) {
-        for (int k = 0; k < n; k++) {
-            int temp = A[i * n + k];
-            for (int j = 0; j < n; j++) {
-                C[i * n + j] += temp * B[k * n + j];
-            }
-        }
-    }
-}
-
 void add(const int* A, const int* B, int* C, int n) {
     int size = n * n;
     for (int i = 0; i < size; i++) C[i] = A[i] + B[i];
@@ -175,6 +161,7 @@ void run_sequential_multiplication(const int* A, const int* B, int* C, int n) {
 }
 
 bool check_result(const int* C_Test, const int* C_Ref, int real_n, int pad_n) {
+    # pragma omp parallel for
     for (int i = 0; i < real_n; i++) {
         for (int j = 0; j < real_n; j++) {
             if (C_Test[i * pad_n + j] != C_Ref[i * pad_n + j]) return false;
@@ -187,8 +174,13 @@ bool check_result(const int* C_Test, const int* C_Ref, int real_n, int pad_n) {
 // --- MAIN ---
 
 int main() {
-    int N_REAL = 2000;
+    int N_REAL;
     int N_PAD = 1;
+
+    // 1. Nhập kích thước ma trận từ người dùng
+    cout << "Nhap kich thuoc ma tran vuong N x N (N > 0): ";
+    cin >> N_REAL;
+
     while (N_PAD < N_REAL) N_PAD *= 2; // 1024
 
     cout << "--- CAU HINH ---" << endl;
@@ -200,33 +192,10 @@ int main() {
     int* A = allocate_matrix(N_PAD);
     int* B = allocate_matrix(N_PAD);
     int* C_Strassen = allocate_matrix(N_PAD);
-    int* C_ParallelStd = allocate_matrix(N_PAD);
-    int* C_Seq = allocate_matrix(N_PAD);
 
     generate_rand_for_matrix(A, N_PAD);
     generate_rand_for_matrix(B, N_PAD);
 
-    // 1. Chạy Tuần tự (Làm chuẩn để so sánh)
-    cout << "\n1. Dang chay Tuan tu (1 Thread)..." << endl;
-    double start_seq = omp_get_wtime();
-    run_sequential_multiplication(A, B, C_Seq, N_PAD);
-    double time_seq = omp_get_wtime() - start_seq;
-    cout << "-> Tuan tu hoan thanh: " << time_seq << "s" << endl;
-
-    // 2. Chạy Parallel Standard (Nhân thường + OpenMP)
-    cout << "\n2. Dang chay Normal Parallel (Nhieu Thread)..." << endl;
-    double start_norm = omp_get_wtime();
-    run_parallel_standard(A, B, C_ParallelStd, N_PAD);
-    double time_norm = omp_get_wtime() - start_norm;
-    cout << "-> Normal Parallel hoan thanh: " << time_norm << "s" << endl;
-    
-    if (check_result(C_ParallelStd, C_Seq, N_REAL, N_PAD)) 
-        cout << "   (Ket qua: CHINH XAC)" << endl;
-    else 
-        cout << "   (Ket qua: SAI LECH!)" << endl;
-
-    // 3. Chạy Strassen (OpenMP)
-    cout << "\n3. Dang chay Strassen (OpenMP)..." << endl;
     double start_strassen = omp_get_wtime();
     #pragma omp parallel
     {
@@ -238,26 +207,8 @@ int main() {
     double time_strassen = omp_get_wtime() - start_strassen;
     cout << "-> Strassen hoan thanh: " << time_strassen << "s" << endl;
 
-    if (check_result(C_Strassen, C_Seq, N_REAL, N_PAD)) 
-        cout << "   (Ket qua: CHINH XAC)" << endl;
-    else 
-        cout << "   (Ket qua: SAI LECH!)" << endl;
-
-    // --- TỔNG KẾT ---
-    cout << "\n--- BANG XEP HANG TOC DO ---" << endl;
-    cout << fixed << setprecision(4);
-    cout << "1. Strassen OpenMP   : " << time_strassen << "s" << endl;
-    cout << "2. Normal Parallel   : " << time_norm << "s" << endl;
-    cout << "3. Sequential        : " << time_seq << "s" << endl;
-    
-    cout << "\n--- SO SANH TANG TOC (SPEEDUP) ---" << endl;
-    cout << setprecision(2);
-    cout << "Normal Parallel vs Sequential: " << time_seq / time_norm << "x" << endl;
-    cout << "Strassen vs Normal Parallel  : " << time_norm / time_strassen << "x" << endl;
-    cout << "Strassen vs Sequential       : " << time_seq / time_strassen << "x" << endl;
-
     // Dọn dẹp
     free_matrix(A); free_matrix(B); 
-    free_matrix(C_Strassen); free_matrix(C_ParallelStd); free_matrix(C_Seq);
+    free_matrix(C_Strassen);
     return 0;
 }
